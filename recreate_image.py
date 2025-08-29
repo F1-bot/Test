@@ -1,30 +1,28 @@
 from PIL import Image, ImageDraw, ImageFont
 
-def create_image_v2():
+def create_image_for_real_this_time():
     """
-    Generates an image that reproduces the provided sample, with user feedback incorporated.
-    - More accurate colors
-    - Left-aligned text block
-    - Semi-transparent background for each text line
+    Generates the image with final adjustments for line spacing.
     """
     # Image parameters
     width, height = 1280, 720
-    bg_color = "#10101d"
-    text_color = "#cccccc"
-    quote_bg_color = (0, 0, 0, 51)  # RGBA for black with 20% opacity
+    bg_color = "#151723"
+    plate_color = "#191925"
+    text_color = "#bfc1ce"
     text_lines = [
         'Unfortunately the Haskell type system cannot "prove" that',
         "instances satisfy these laws."
     ]
     output_filename = "reproduced_image.png"
-    padding = 15 # Padding for the quote background
+    padding = 10      # Padding within the plates (left/right/top/bottom)
+    line_gap = 15       # Extra space between the plates
 
-    # Create a new image in RGBA mode to support transparency
-    image = Image.new("RGBA", (width, height), color=bg_color)
+    # Create a new image in RGB mode
+    image = Image.new("RGB", (width, height), color=bg_color)
     draw = ImageDraw.Draw(image)
 
     # Font selection
-    font_size = 40
+    font_size = 36
     font_path = None
     common_fonts = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -42,53 +40,48 @@ def create_image_v2():
         print("Could not find a common system font. Using default font.")
         font = ImageFont.load_default()
 
-    # --- Layout Calculation ---
+    # --- Layout Calculation (with Line Gap) ---
 
-    # 1. Get dimensions for all text lines and find the max width
+    # 1. Get text dimensions
     line_bboxes = [draw.textbbox((0, 0), line, font=font) for line in text_lines]
+    line_widths = [bbox[2] - bbox[0] for bbox in line_bboxes]
     line_heights = [bbox[3] - bbox[1] for bbox in line_bboxes]
-    max_text_width = max(bbox[2] - bbox[0] for bbox in line_bboxes)
+    max_text_width = max(line_widths)
 
-    # 2. Calculate total height of the text block including padding
-    total_text_height = sum(line_heights) + (len(text_lines) * padding)
+    # 2. Calculate total height of the block including padding and gaps
+    total_plate_height = sum(line_heights) + len(text_lines) * (2 * padding)
+    total_gap_height = (len(text_lines) - 1) * line_gap
+    total_block_height = total_plate_height + total_gap_height
 
-    # 3. Calculate top-left corner for the text block to center it
-    start_x = (width - max_text_width) / 2
-    start_y = (height - total_text_height) / 2
-
-    current_y = start_y
+    # 3. Calculate starting positions
+    block_start_x = (width - max_text_width) / 2
+    current_y = (height - total_block_height) / 2
 
     # --- Drawing ---
 
-    # Create a separate transparent layer for drawing rectangles and text
-    text_layer = Image.new("RGBA", image.size, (255, 255, 255, 0))
-    text_draw = ImageDraw.Draw(text_layer)
-
     for i, line in enumerate(text_lines):
-        line_width = line_bboxes[i][2] - line_bboxes[i][0]
+        line_width = line_widths[i]
         line_height = line_heights[i]
 
-        # Define the rectangle for the quote background
-        rect_x0 = start_x - padding
-        rect_y0 = current_y - (padding/2)
-        rect_x1 = start_x + max_text_width + padding
-        rect_y1 = current_y + line_height + (padding/2)
+        # Define the plate for the current line
+        plate_x0 = block_start_x - padding
+        plate_y0 = current_y
+        plate_x1 = block_start_x + line_width + padding
+        plate_y1 = current_y + line_height + (2 * padding)
 
-        # Draw the semi-transparent rectangle
-        text_draw.rectangle([rect_x0, rect_y0, rect_x1, rect_y1], fill=quote_bg_color)
+        draw.rectangle([plate_x0, plate_y0, plate_x1, plate_y1], fill=plate_color)
 
-        # Draw the text
-        text_draw.text((start_x, current_y), line, font=font, fill=text_color)
+        # Draw the text, aligned to the block and centered vertically in its plate
+        text_x = block_start_x
+        text_y = current_y + padding
+        draw.text((text_x, text_y), line, font=font, fill=text_color)
 
-        # Update Y position for the next line
-        current_y += line_height + padding
-
-    # Composite the text layer onto the main image
-    image = Image.alpha_composite(image, text_layer)
+        # Update Y for the next plate, including the gap
+        current_y += line_height + (2 * padding) + line_gap
 
     # Save the image
     image.save(output_filename)
     print(f"Image saved as {output_filename}")
 
 if __name__ == "__main__":
-    create_image_v2()
+    create_image_for_real_this_time()
