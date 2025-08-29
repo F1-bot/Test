@@ -1,32 +1,36 @@
 from PIL import Image, ImageDraw, ImageFont
 
-def create_image():
+def create_image_v2():
     """
-    Generates an image that reproduces the provided sample.
+    Generates an image that reproduces the provided sample, with user feedback incorporated.
+    - More accurate colors
+    - Left-aligned text block
+    - Semi-transparent background for each text line
     """
     # Image parameters
     width, height = 1280, 720
-    bg_color = "#202124"  # A dark blue-gray
-    text_color = "#D1D1D1" # A light gray
+    bg_color = "#10101d"
+    text_color = "#cccccc"
+    quote_bg_color = (0, 0, 0, 51)  # RGBA for black with 20% opacity
     text_lines = [
         'Unfortunately the Haskell type system cannot "prove" that',
         "instances satisfy these laws."
     ]
     output_filename = "reproduced_image.png"
+    padding = 15 # Padding for the quote background
 
-    # Create a new image with the specified background color
-    image = Image.new("RGB", (width, height), color=bg_color)
+    # Create a new image in RGBA mode to support transparency
+    image = Image.new("RGBA", (width, height), color=bg_color)
     draw = ImageDraw.Draw(image)
 
     # Font selection
     font_size = 40
     font_path = None
     common_fonts = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
-        "C:/Windows/Fonts/Arial.ttf",                      # Windows
-        "/System/Library/Fonts/Supplemental/Arial.ttf",    # macOS
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "C:/Windows/Fonts/Arial.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
     ]
-
     for f_path in common_fonts:
         try:
             font = ImageFont.truetype(f_path, font_size)
@@ -34,44 +38,57 @@ def create_image():
             break
         except IOError:
             continue
-
     if not font_path:
         print("Could not find a common system font. Using default font.")
         font = ImageFont.load_default()
 
-    # Calculate text size and position
-    # The anchor 'mm' means the text is centered horizontally and vertically at the given coordinate.
-    x, y = width / 2, height / 2
+    # --- Layout Calculation ---
 
-    # We need to calculate the total height of the text block to center it vertically.
-    total_text_height = 0
-    line_heights = []
-    for line in text_lines:
-        try:
-            # Use getbbox for more accurate size calculation
-            bbox = draw.textbbox((0, 0), line, font=font)
-            line_height = bbox[3] - bbox[1]
-        except AttributeError:
-            # Fallback for older Pillow versions
-            line_width, line_height = draw.textsize(line, font=font)
+    # 1. Get dimensions for all text lines and find the max width
+    line_bboxes = [draw.textbbox((0, 0), line, font=font) for line in text_lines]
+    line_heights = [bbox[3] - bbox[1] for bbox in line_bboxes]
+    max_text_width = max(bbox[2] - bbox[0] for bbox in line_bboxes)
 
-        total_text_height += line_height
-        line_heights.append(line_height)
+    # 2. Calculate total height of the text block including padding
+    total_text_height = sum(line_heights) + (len(text_lines) * padding)
 
-    # Calculate starting y position
-    current_y = y - (total_text_height / 2)
+    # 3. Calculate top-left corner for the text block to center it
+    start_x = (width - max_text_width) / 2
+    start_y = (height - total_text_height) / 2
 
-    # Draw each line of text
+    current_y = start_y
+
+    # --- Drawing ---
+
+    # Create a separate transparent layer for drawing rectangles and text
+    text_layer = Image.new("RGBA", image.size, (255, 255, 255, 0))
+    text_draw = ImageDraw.Draw(text_layer)
+
     for i, line in enumerate(text_lines):
-        # Center each line horizontally
-        line_y = current_y + (line_heights[i] / 2)
-        draw.text((x, line_y), line, font=font, fill=text_color, anchor="mm")
-        current_y += line_heights[i]
+        line_width = line_bboxes[i][2] - line_bboxes[i][0]
+        line_height = line_heights[i]
 
+        # Define the rectangle for the quote background
+        rect_x0 = start_x - padding
+        rect_y0 = current_y - (padding/2)
+        rect_x1 = start_x + max_text_width + padding
+        rect_y1 = current_y + line_height + (padding/2)
+
+        # Draw the semi-transparent rectangle
+        text_draw.rectangle([rect_x0, rect_y0, rect_x1, rect_y1], fill=quote_bg_color)
+
+        # Draw the text
+        text_draw.text((start_x, current_y), line, font=font, fill=text_color)
+
+        # Update Y position for the next line
+        current_y += line_height + padding
+
+    # Composite the text layer onto the main image
+    image = Image.alpha_composite(image, text_layer)
 
     # Save the image
     image.save(output_filename)
     print(f"Image saved as {output_filename}")
 
 if __name__ == "__main__":
-    create_image()
+    create_image_v2()
